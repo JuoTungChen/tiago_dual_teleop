@@ -1,0 +1,14 @@
+<launch>
+<!-- Please note that this is only an example!
+     It is not guaranteed to work with your setup but can be used as a starting point. -->
+  <node pkg="joy" type="joy_node" name="joy_node">
+  </node>
+
+  <node pkg="joy_teleop" type="vive_teleop.py" name="joy_teleop">
+  </node>
+
+  <group ns="torso_controller">
+    <node pkg="joy_teleop" type="incrementer_server.py" name="incrementer"/>
+  </group>
+
+</launch>
