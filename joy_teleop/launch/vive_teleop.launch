@@ -1,11 +1,30 @@
 <launch>
-<!-- Please note that this is only an example!
-     It is not guaranteed to work with your setup but can be used as a starting point. -->
+  <arg name="tracking_mode" default="press"/>
+
   <node pkg="joy" type="joy_node" name="joy_node">
   </node>
 
   <node pkg="joy_teleop" type="vive_teleop.py" name="joy_teleop">
   </node>
+
+    <node pkg="joy_teleop" type="tiago_arm_position_control.py" name="right_arm_position_control">
+        <param name="controller_side" type="string" value="right"/>
+    </node>
+    <node pkg="joy_teleop" type="vive_pose_mapping.py" name="vive_pose_mapping_right" output="screen">
+      <param name="controller_side" type="string" value="right"/>
+      <param name="tracking_mode" type="string" value="$(arg tracking_mode)"/>
+  </node>
+
+
+  <node pkg="joy_teleop" type="tiago_arm_position_control.py" name="arm_position_control">
+      <param name="controller_side" type="string" value="left"/>
+  </node>
+
+  <node pkg="joy_teleop" type="vive_pose_mapping.py" name="vive_pose_mapping_left" output="screen">
+      <param name="controller_side" type="string" value="left"/>
+      <param name="tracking_mode" type="string" value="$(arg tracking_mode)"/>
+  </node>
+  
 
   <group ns="torso_controller">
     <node pkg="joy_teleop" type="incrementer_server.py" name="incrementer"/>

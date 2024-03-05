@@ -3,82 +3,100 @@
 import sys
 import rospy
 import math
-from geometry_msgs.msg import Twist, PoseStamped, TwistStamped
-from sensor_msgs.msg import Joy
-import actionlib
-from tf.transformations import euler_from_quaternion, quaternion_from_euler
+import numpy as np
 
+import tf
+import actionlib
+
+from geometry_msgs.msg import Twist, PoseStamped, TwistStamped
+from sensor_msgs.msg import Joy, JointState
+from std_msgs.msg import Float64
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from geometry_msgs.msg import TransformStamped, Pose
 from teleop_tools_msgs.msg import IncrementAction as TTIA
 from teleop_tools_msgs.msg import IncrementGoal as TTIG
 from control_msgs.msg import FollowJointTrajectoryAction, FollowJointTrajectoryGoal
-from trajectory_msgs.msg import JointTrajectoryPoint
+from trajectory_msgs.msg import JointTrajectoryPoint, JointTrajectory
 from controller_manager_msgs.srv import SwitchController
 from moveit_msgs.msg import MoveItErrorCodes
 # from moveit_python import MoveGroupInterface, PlanningSceneInterface
 
+from trac_ik_python.trac_ik import IK
 
 import moveit_commander
+
 class JoystickTeleop():
     def __init__(self):
 
         ##-------- Variables---------## 
-        self.right_controller_x, self.right_controller_y, self.right_controller_z = 0, 0, 0
-        self.right_controller_rx, self.right_controller_ry, self.right_controller_rz, self.right_controller_rw = 0, 0, 0, 0
 
-        self.left_controller_x, self.left_controller_y, self.left_controller_z = 0, 0, 0
-        self.left_controller_rx, self.left_controller_ry, self.left_controller_rz, self.left_controller_rw = 0, 0, 0, 0
+        self.head_joint_limits = [[-1.24, 1.24], [-0.98, 0.72]]
 
         self.alpha = 0.7
         self.initialized = False
         self.filtered_orientation = [0.0, 0.0]  # Initial filtered orientation
         self.prev_head_pos = [0.0, 0.0]
-        moveit_commander.roscpp_initialize(sys.argv)
-        self.robot = moveit_commander.RobotCommander()
-        self.scene = moveit_commander.PlanningSceneInterface()
-        self.left_group_name = "arm_left_torso"
-        self.left_move_group = moveit_commander.MoveGroupCommander(self.left_group_name)
-        # self.left_move_group.setPlannerId("SBLkConfigDefault")
-        self._pub_cmd = rospy.Publisher('key_vel', Twist, queue_size=10)
-        # self._joy_subscriber = rospy.Subscriber('joy', Joy, self._joy_callback)
 
+        self.activated = False
 
-        self.torso_client = actionlib.SimpleActionClient('/torso_controller/increment', TTIA)
-        self.head_client = actionlib.SimpleActionClient('/head_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
-        self.left_gripper_client = actionlib.SimpleActionClient('/parallel_gripper_left_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
-        self.right_gripper_client = actionlib.SimpleActionClient('/parallel_gripper_right_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
-        # self.left_arm_pub = rospy.Publisher('/servo_server/delta_twist_cmds', TwistStamped, queue_size=10)
-        self.left_arm_client = actionlib.SimpleActionClient('/arm_left_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
         self.gripper_pressed = False
         self._hz = rospy.get_param('~hz', 10)
         self._forward_rate = rospy.get_param('~forward_rate', 0.8)
-        self._backward_rate = rospy.get_param('~backward_rate', 0.5)
-        self._rotation_rate = rospy.get_param('~rotation_rate', 1.0)
-        self.arm_side = "left"
         self._angular = 0
         self._linear = 0
         self._linear_y = 0
-        self._mode = 'base'  # Initial mode is base control
-        self.translation_mode = True
         self.vel_scale = 0.5
         self.rot_scale = 0.1
-        self.start_controller=['arm_left_JGP']
-        self.stop_controller=['arm_left_controller', 'torso_controller']
-        self.arm_left_home_joint_angles = [0.1404634725889998, -1.0999085872589465, 1.4541173782490207, 2.720822327116011, 1.6583055087691845, -1.582990280917917, 1.3793348919241852, 0.0003437668173003061]
 
 
-        self.head_joint_limits = [[-1.24, 1.24], [-0.98, 0.72]]
+        # # -------------- ROS Publishers --------------
+        self._pub_cmd = rospy.Publisher('key_vel', Twist, queue_size=10)
 
-        rospy.sleep(0.5)
+        # # -------------- ROS Action Clients --------------
+        self.torso_client = actionlib.SimpleActionClient('/torso_controller/increment', TTIA)
+        self.head_client = actionlib.SimpleActionClient('/head_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+
+        rospy.sleep(0.1)
+
+        # # -------------- ROS Subscribers --------------
 
         rospy.Subscriber('/Right_Hand', TransformStamped, self.__right_input_pose_callback)
         rospy.Subscriber('/Right_Buttons', Joy, self.__right_input_buttons_callback)
         rospy.Subscriber('/Left_Hand', TransformStamped, self.__left_input_pose_callback)
         rospy.Subscriber('/Left_Buttons', Joy, self.__left_input_buttons_callback)
         rospy.Subscriber('/Head_Motion', PoseStamped, self.__head_motion_callback)
+        rospy.Subscriber('/robot_activation', Float64, self.__robot_activation_callback)
 
+        rospy.sleep(0.2)
+
+        rospy.logwarn("\n------------vive teleop ready------------\n\n")
 
     ##-------- Callback Functions---------## 
+    def __robot_activation_callback(self, msg):
+        # rospy.logwarn("%s", msg.data)
+
+        if msg.data == 2.0 and self.activated == False:
+            self.activated = True
+            # rospy.logwarn("robot activated")
+
+        if msg.data == 0.0 and self.activated == True:
+            self.activated = False
+            # rospy.logwarn("robot stopped")
+
+
+    # def __get_arm_left_joint_states(self):
+    def __joint_states_callback(self, msg):
+
+        torso_joint = msg.position[20]
+        if self.arm_right_ik_solver.number_of_joints == 7:
+            self.arm_left_joint_states = [msg.position[0], msg.position[1], msg.position[2], msg.position[3], msg.position[4], msg.position[5], msg.position[6]] 
+
+            self.arm_right_joint_states = [msg.position[7], msg.position[8], msg.position[9], msg.position[10],
+                                          msg.position[11], msg.position[12], msg.position[13]] 
+        elif self.arm_right_ik_solver.number_of_joints == 8:
+            self.arm_right_joint_states = [torso_joint, msg.position[7], msg.position[8], msg.position[9], msg.position[10],
+                                          msg.position[11], msg.position[12], msg.position[13]] 
+
 
     def __right_input_pose_callback(self, msg):
 
@@ -149,6 +167,7 @@ class JoystickTeleop():
 
 
     ##-------- Helper Functions---------## 
+
     def bound(self, low, high, value):
          return max(low, min(high, value))
 
@@ -169,150 +188,34 @@ class JoystickTeleop():
             head_position = [joy_msg.axes[0], joy_msg.axes[1]]
             self._send_head_goal(head_position)
 
-    def _gripper_control(self, joy_msg):
-        if(not self.gripper_pressed and joy_msg.axes[5] != 0):
-            self.gripper_pressed = True
-        # Map joystick axis 5 to gripper position
-        gripper_position = joy_msg.axes[5] * 0.04 + 0.04  
-
-        # Create a trajectory point for the gripper
-        gripper_point = JointTrajectoryPoint()
-        gripper_point.positions = [gripper_position]
-        gripper_point.velocities = []
-        gripper_point.accelerations = []
-        gripper_point.effort = []
-        gripper_point.time_from_start = rospy.Duration(1)  # Adjust the duration as needed
-
-        # Create and send the gripper goal
-        gripper_goal = FollowJointTrajectoryGoal()
-        gripper_goal.trajectory.points = [gripper_point]
-        gripper_goal.trajectory.header.stamp = rospy.Time.now()
-        if(self.arm_side == "left"):
-            gripper_goal.trajectory.joint_names = ["gripper_left_left_finger_joint", "gripper_left_right_finger_joint"]
-            if self.gripper_pressed:
-                self.left_gripper_client.send_goal(gripper_goal)
-        elif(self.arm_side == "right"):
-            gripper_goal.trajectory.joint_names = ["gripper_right_left_finger_joint", "gripper_right_right_finger_joint"]
-            if self.gripper_pressed:
-                self.right_gripper_client.send_goal(gripper_goal)
-
-    def _arm_cartesian_control(self, joy_msg):
-        # Map joystick axes to Cartesian coordinates
-        x = joy_msg.axes[1]  # Axis 1 controls x
-        y = joy_msg.axes[0]  # Axis 0 controls y
-        z = joy_msg.axes[4]  # Axis 4 controls z
-
-        # Get the current end-effector pose
-        current_pose = self.left_move_group.get_current_pose().pose
-
-        # Update the target pose based on joystick input
-        target_pose = PoseStamped()
-        target_pose.header.frame_id = "base_footprint"
-        target_pose.pose.position.x = current_pose.position.x + x
-        target_pose.pose.position.y = current_pose.position.y + y
-        target_pose.pose.position.z = current_pose.position.z + z
-        target_pose.pose.orientation = current_pose.orientation
-        self.left_move_group.set_pose_target(target_pose)
-        success = self.left_move_group.go(wait=False)
-        # Calling `stop()` ensures that there is no residual movement
-        self.left_move_group.stop()
-        # It is always good to clear your targets after planning with poses.
-        # Note: there is no equivalent function for clear_joint_value_targets().
-        self.left_move_group.clear_pose_targets()
-
-    # def _left_arm_teleop_control(self, joy_msg):
-    #     # Set the target pose for the left arm
-    #     target_pose = self._calculate_target_pose(joy_msg)
-
-    #     # Plan the trajectory
-    #     self.left_move_group.set_pose_target(target_pose)
-    #     plan = self.left_move_group.plan()
-
-    #     # Check if the plan is valid
-    #     if plan:
-    #         # Publish the trajectory to the arm_controller/command topic
-    #         # self._publish_trajectory(plan)
-    #         self.left_move_group.go(wait=True)
-
-    #     else:
-    #         rospy.logwarn("Failed to plan trajectory")
-
-    # def _calculate_target_pose(self, joy_msg):
-
-    #     target_pose = PoseStamped()
-    #     target_pose.header.frame_id = "base_footprint"  # Set the appropriate reference frame
-    #     if(self.translation_mode):
-    #         target_pose.pose.position.x = self.vel_scale* joy_msg.axes[1]  # Set the desired position based on joystick input
-    #         target_pose.pose.position.y = self.vel_scale* joy_msg.axes[0]
-    #         target_pose.pose.position.z = self.vel_scale* joy_msg.axes[4]
-    #         target_pose.pose.orientation.w = 1.0  # Set the desired orientation
-    #     else:
-    #         target_pose.pose.position.x = 0.0
-    #         target_pose.pose.position.y = 0.0
-    #         target_pose.pose.position.z = 0.0
-    #         target_pose.pose.orientation.x = self.rot_scale* joy_msg.axes[0]
-    #         target_pose.pose.orientation.y = self.rot_scale* joy_msg.axes[1]
-    #         target_pose.pose.orientation.z = self.rot_scale* joy_msg.axes[4]
-    #     return target_pose
     
-    # def _publish_trajectory(self, plan):
-    #     # Extract the trajectory from the plan
-    #     rospy.logwarn(plan)
-    #     trajectory = plan
-    #     self.left_arm_client.send_goal(trajectory)
+    def __compose_pose_message(self, target_pose):
+        """
+        target_pose: dict
+            'position': np.array([0.0, 0.0, 0.0]),
+            'orientation': np.array([1.0, 0.0, 0.0, 0.0])
+        
+        """
 
-    def _left_arm_teleop_control(self, joy_msg):
-        twist_msg = TwistStamped()
-        twist_msg.header.stamp = rospy.Time.now()
-        if(self.translation_mode):
-            twist_msg.twist.linear.x = self.vel_scale* joy_msg.axes[1]  # Left stick up and down for controlling the x-axis
-            twist_msg.twist.linear.y = self.vel_scale* joy_msg.axes[0]  # Left stick left and right for controlling the y-axis
-            twist_msg.twist.linear.z = self.vel_scale* joy_msg.axes[4]  # Right stick up and down for controlling the z-axis
-            twist_msg.twist.angular.x = 0.0
-            twist_msg.twist.angular.y = 0.0
-            twist_msg.twist.angular.z = 0.0
-        else:
-            twist_msg.twist.linear.x = 0.0
-            twist_msg.twist.linear.y = 0.0
-            twist_msg.twist.linear.z = 0.0
-            twist_msg.twist.angular.x = self.rot_scale* joy_msg.axes[0]
-            twist_msg.twist.angular.y = self.rot_scale* joy_msg.axes[1]
-            twist_msg.twist.angular.z = self.rot_scale* joy_msg.axes[4]
-        # end_effector_command = "speedl([{},{},{}], 0.1, 0.1)".format(twist.linear.x, twist.linear.y, twist.linear.z)  # Adjust the speed values as needed
-        self.left_arm_pub.publish(twist_msg)
+        # NOTE: These two checks might not be needed, check function usage.
+        if not isinstance(target_pose, dict):
+            raise TypeError('target_pose is not a dictionary.')
 
-    def _change_controller(self, start_controller, stop_controller):
-        timeout_value = 0.5
-        rospy.wait_for_service('/controller_manager/switch_controller')
-        try:
-            rospy.set_param('/controller_manager/incoming_command_timeout', timeout_value)
-            switch_controller = rospy.ServiceProxy('/controller_manager/switch_controller', SwitchController)
-            response = switch_controller(
-                start_controllers=start_controller,
-                stop_controllers=stop_controller,
-                strictness=1,
-            )
-            rospy.logwarn("changed controller")
-        except rospy.ServiceException as e:
-            rospy.logwarn("Service call failed:", e)
+        for key in ['position', 'orientation']:
+            if key not in target_pose:
+                raise KeyError(f'key {key} not found in target_pose.')
 
-    def _move_to_home_position(self):
-        rospy.logwarn("moving to home position...")
-        self._change_controller(self.stop_controller, self.start_controller)
-        print("changed controller to eff")
-        rospy.sleep(1)
-        self.left_move_group.set_max_velocity_scaling_factor(0.5)
-        self.left_move_group.set_max_acceleration_scaling_factor(0.5)
-        # self.open_gripper()
-        joint_goal= self.arm_left_home_joint_angles
-        # curr_joint = self.left_move_group.get_current_joint_values()
-        # rospy.logwarn(curr_joint)
-        self.left_move_group.go(joint_goal,wait=True)
-        self.left_move_group.stop()
-        rospy.logwarn("moved to home")
-        self._change_controller(self.start_controller, self.stop_controller)
-        rospy.sleep(1)
-        rospy.logwarn("changed controller to pos")
+        pose_message = Pose()
+        pose_message.position.x = target_pose['position'][0]
+        pose_message.position.y = target_pose['position'][1]
+        pose_message.position.z = target_pose['position'][2]
+
+        pose_message.orientation.x = target_pose['orientation'][0]
+        pose_message.orientation.y = target_pose['orientation'][1]
+        pose_message.orientation.z = target_pose['orientation'][2]
+        pose_message.orientation.w = target_pose['orientation'][3]
+
+        return pose_message
 
 
     def _send_head_goal(self, head_position):
@@ -323,7 +226,7 @@ class JoystickTeleop():
             point = JointTrajectoryPoint()
             point.positions = head_position
             point.velocities = [abs(self.prev_head_pos[0] - head_position[0]), abs(self.prev_head_pos[1] - head_position[1])]  # Set desired joint velocities
-            point.time_from_start = rospy.Duration(0.1)  # A small duration for smooth motion
+            point.time_from_start = rospy.Duration(0.3)  # A small duration for smooth motion
 
             # Create and send the head goal
             head_goal = FollowJointTrajectoryGoal()
@@ -357,7 +260,11 @@ class JoystickTeleop():
         rate = rospy.Rate(self._hz)
         self._running = True
         while self._running and not rospy.is_shutdown():
-            rate.sleep()
+            # rospy.logwarn("%s", self.__get_arm_left_transformation())
+
+            rospy.sleep(0.25)
+            # self.plan_and_execute_arm_right_trajectory()
+            # rate.sleep()
 
 
 if __name__ == '__main__':

@@ -21,14 +21,24 @@ class JoystickTeleop():
         self.left_group_name = "arm_left_torso"
         self.left_move_group = moveit_commander.MoveGroupCommander(self.left_group_name)
         # self.left_move_group.setPlannerId("SBLkConfigDefault")
-        self._pub_cmd = rospy.Publisher('key_vel', Twist, queue_size=10)
+
+
+        # # ROS Subscribers
         self._joy_subscriber = rospy.Subscriber('joy', Joy, self._joy_callback)
+
+
+        # # ROS Publishers
+        self._pub_cmd = rospy.Publisher('key_vel', Twist, queue_size=10)
+
+        # # ROS Action Clients
         self.torso_client = actionlib.SimpleActionClient('/torso_controller/increment', TTIA)
         self.head_client = actionlib.SimpleActionClient('/head_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
         self.left_gripper_client = actionlib.SimpleActionClient('/parallel_gripper_left_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
         self.right_gripper_client = actionlib.SimpleActionClient('/parallel_gripper_right_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
         # self.left_arm_pub = rospy.Publisher('/servo_server/delta_twist_cmds', TwistStamped, queue_size=10)
         self.left_arm_client = actionlib.SimpleActionClient('/arm_left_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+        # self.right_arm_client = actionlib.SimpleActionClient('/arm_right_controller/follow_joint_trajectory', FollowJointTrajectoryAction)
+
         self.gripper_pressed = False
         self._hz = rospy.get_param('~hz', 10)
         self._forward_rate = rospy.get_param('~forward_rate', 0.8)
