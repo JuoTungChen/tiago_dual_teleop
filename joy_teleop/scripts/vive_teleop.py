@@ -1,5 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+
+"""
+This script is used for teleoperating the Tiago++ robots torso, head, and mobile base.
+
+Controller mapping:
+
+    /Head_Motion (HTC vive headset) -> robot head
+    /Right_Buttons trackpad -> x, y motion of the mobile base
+    /Right_Buttons menu button -> lifts torso by 5 cm
+    /Left_Buttons trackpad -> yaw rotation of the mobile base
+    /Left_Buttons menu button -> decrease torso height by 5 cm
+
+"""
+
 import sys
 import rospy
 import math

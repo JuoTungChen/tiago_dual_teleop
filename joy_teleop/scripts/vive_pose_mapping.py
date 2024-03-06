@@ -134,7 +134,8 @@ class VivePoseMapping:
         )
 
         # # Topic subscriber:
-        rospy.Subscriber('/arm_right_target_pose', Pose, self.__commanded_pose_callback)
+        rospy.Subscriber('/arm_' + self.CONTROLLER_SIDE + '_target_pose', Pose, self.__commanded_pose_callback)
+        
         if self.CONTROLLER_SIDE == "right":
             rospy.Subscriber(
                 '/Right_Hand',

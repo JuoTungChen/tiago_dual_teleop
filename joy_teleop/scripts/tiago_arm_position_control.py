@@ -1,5 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+
+"""
+This script is used for teleoperating the Tiago++ robots arms.
+
+Controller mapping:
+
+    /Right_Buttons trackpad -> x, y motion of the mobile base
+    /Right_Buttons menu button -> lifts torso by 5 cm
+    /Left_Buttons trackpad -> yaw rotation of the mobile base
+    /Left_Buttons menu button -> decrease torso height by 5 cm
+
+"""
+
 import sys
 import rospy
 import math
@@ -186,16 +200,17 @@ class TiagoArmPositionControl():
         return pose_message
 
     def publish_arm_trajectory(self):
-        vel_gain = 0.02  # Adjust the maximum velocity as needed
+        vel_gain = 0.01  # Adjust the maximum velocity as needed
 
         if self.activated:  
             # Solve IK
             target_joint_angles = self.arm_ik_solver.get_ik(self.arm_joint_states,
-                                                                  self.arm_goal_pose['position'][0], self.arm_goal_pose['position'][1], self.arm_goal_pose['position'][2],
-                                                                  self.arm_goal_pose['orientation'][0], self.arm_goal_pose['orientation'][1], self.arm_goal_pose['orientation'][2], self.arm_goal_pose['orientation'][3])
+                                                          self.arm_goal_pose['position'][0], self.arm_goal_pose['position'][1], self.arm_goal_pose['position'][2],
+                                                          self.arm_goal_pose['orientation'][0], self.arm_goal_pose['orientation'][1], self.arm_goal_pose['orientation'][2], self.arm_goal_pose['orientation'][3])
 
             self.tf_br.sendTransform((self.arm_goal_pose['position'][0], self.arm_goal_pose['position'][1], self.arm_goal_pose['position'][2]),
-                                    (self.arm_goal_pose['orientation'][0], self.arm_goal_pose['orientation'][1], self.arm_goal_pose['orientation'][2], self.arm_goal_pose['orientation'][3]), rospy.Time.now(), "ee_goal", self.arm_base_link)
+                                    (self.arm_goal_pose['orientation'][0], self.arm_goal_pose['orientation'][1], self.arm_goal_pose['orientation'][2], self.arm_goal_pose['orientation'][3]),
+                                     rospy.Time.now(), self.controller_side + "_ee_goal", self.arm_base_link)
 
             # Create a JointTrajectory message
             if target_joint_angles is not None:
@@ -212,7 +227,7 @@ class TiagoArmPositionControl():
 
                 self.arm_client.send_goal(joint_trajectory_goal)
                 self.target_pose_pub.publish(self.__compose_pose_message(self.arm_goal_pose))
-                rospy.sleep(0.005)
+                # rospy.sleep(0.005)
 
 
             else:
@@ -232,10 +247,13 @@ class TiagoArmPositionControl():
 if __name__ == '__main__':
 
     try:
-        controller_side = rospy.get_param(
-        param_name='/controller_side',
-        default='right',
-        )
+        args = rospy.myargv(argv=sys.argv)
+        controller_side = args[1]
+        rospy.logwarn("controller side: %s", controller_side)
+        # controller_side = rospy.get_param(
+        # param_name='/controller_side',
+        # default='right',
+        # )
         rospy.init_node('tiago_arm'+controller_side+'_position_control')
         app = TiagoArmPositionControl(controller_side=controller_side)
         app.run()
