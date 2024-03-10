@@ -75,9 +75,9 @@ class JoystickTeleop():
 
         # # -------------- ROS Subscribers --------------
 
-        rospy.Subscriber('/Right_Hand', TransformStamped, self.__right_input_pose_callback)
+        # rospy.Subscriber('/Right_Hand', TransformStamped, self.__right_input_pose_callback)
         rospy.Subscriber('/Right_Buttons', Joy, self.__right_input_buttons_callback)
-        rospy.Subscriber('/Left_Hand', TransformStamped, self.__left_input_pose_callback)
+        # rospy.Subscriber('/Left_Hand', TransformStamped, self.__left_input_pose_callback)
         rospy.Subscriber('/Left_Buttons', Joy, self.__left_input_buttons_callback)
         rospy.Subscriber('/Head_Motion', PoseStamped, self.__head_motion_callback)
         rospy.Subscriber('/robot_activation', Float64, self.__robot_activation_callback)
@@ -113,41 +113,54 @@ class JoystickTeleop():
                                           msg.position[11], msg.position[12], msg.position[13]] 
 
 
-    def __right_input_pose_callback(self, msg):
+    # def __right_input_pose_callback(self, msg):
 
-        self.right_controller_x = msg.transform.translation.x
-        self.right_controller_y = msg.transform.translation.y
-        self.right_controller_z = msg.transform.translation.z
-        self.right_controller_rx, self.right_controller_ry, self.right_controller_rz, self.right_controller_rw = msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z, msg.transform.rotation.w
+    #     self.right_controller_x = msg.transform.translation.x
+    #     self.right_controller_y = msg.transform.translation.y
+    #     self.right_controller_z = msg.transform.translation.z
+    #     self.right_controller_rx, self.right_controller_ry, self.right_controller_rz, self.right_controller_rw = msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z, msg.transform.rotation.w
 
     def __right_input_buttons_callback(self, msg):
         """
             determine if it is squeezing or button press 
 
         """
-        self._base_control(msg)
         if msg.buttons[0] == 1:
             self._torso_increment(0.05)  # Increment for torso up
-        self._publish()
+
+        if (msg.buttons[2] == 1.0):
+            self._base_control(msg)
+        else:
+            self._linear = 0.0
+            self._linear_y = 0.0
+            # self._publish()
 
 
-    def __left_input_pose_callback(self, msg):
+    # def __left_input_pose_callback(self, msg):
 
-        self.left_controller_x = msg.transform.translation.x
-        self.left_controller_y = msg.transform.translation.y
-        self.left_controller_z = msg.transform.translation.z
-        self.left_controller_rx, self.left_controller_ry, self.left_controller_rz, self.left_controller_rw = msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z, msg.transform.rotation.w
+    #     self.left_controller_x = msg.transform.translation.x
+    #     self.left_controller_y = msg.transform.translation.y
+    #     self.left_controller_z = msg.transform.translation.z
+    #     self.left_controller_rx, self.left_controller_ry, self.left_controller_rz, self.left_controller_rw = msg.transform.rotation.x, msg.transform.rotation.y, msg.transform.rotation.z, msg.transform.rotation.w
 
     def __left_input_buttons_callback(self, msg):
         """
             control mobile base using the trackpad on the left controller
 
         """
-        self._base_rotate(msg)
+        if (msg.buttons[2] == 1.0):
+            if(abs(msg.axes[0]) > abs(msg.axes[1])):
+                self._base_rotate(msg)
 
-        if msg.buttons[0] == 1:
-            self._torso_increment(-0.05)  # Increment for torso up
-        self._publish()
+            else:
+                self._torso_increment(0.1 * msg.axes[1])  # Increment for torso up
+        else:
+            self._angular = 0.0
+        ## menu button pressed -> home 
+        # if msg.buttons[0] == 1:
+        #     self,home_robot_arms()
+            # self._torso_increment(-0.05)  # Increment for torso up
+
 
 
     def __head_motion_callback(self, msg):
@@ -276,6 +289,7 @@ class JoystickTeleop():
         self._running = True
         while self._running and not rospy.is_shutdown():
             # rospy.logwarn("%s", self.__get_arm_left_transformation())
+            self._publish()
 
             rospy.sleep(0.25)
             # self.plan_and_execute_arm_right_trajectory()

@@ -189,7 +189,7 @@ class VivePoseMapping:
 
         if self.vive_buttons[2] == 1:  # Side button to start control
             self.flagg = 1
-            self.activate_button = 1
+            # self.activate_button = 1
 
             # rospy.sleep(0.5)
             # print("started")
