@@ -1,32 +1,33 @@
+
 <launch>
   <arg name="tracking_mode" default="press"/>
+  <arg name="sim" default="true"/>
 
-  <node pkg="joy" type="joy_node" name="joy_node">
+
+  <node pkg="joy_teleop" type="vive_teleop.py" name="vive_teleop" args="$(arg sim)">
   </node>
 
-  <node pkg="joy_teleop" type="vive_teleop.py" name="joy_teleop">
+  <node pkg="joy_teleop" type="tiago_arm_position_control.py" name="right_arm_position_control" args="right $(arg sim)" >
   </node>
 
-  <node pkg="joy_teleop" type="tiago_arm_position_control.py" name="right_arm_position_control" args="right">
-  </node>
-  
-  <node pkg="joy_teleop" type="vive_pose_mapping.py" name="vive_pose_mapping_right" output="screen">
-    <param name="controller_side" type="string" value="right"/>
-    <param name="tracking_mode" type="string" value="$(arg tracking_mode)"/>
+  <node pkg="joy_teleop" type="vive_pose_mapping.py" name="vive_pose_mapping_right" output="screen" args="right $(arg tracking_mode)">
+
   </node>
 
 
-  <node pkg="joy_teleop" type="tiago_arm_position_control.py" name="arm_position_control" args="left">
+  <node pkg="joy_teleop" type="tiago_arm_position_control.py" name="left_arm_position_control" args="left $(arg sim)">
   </node>
 
-  <node pkg="joy_teleop" type="vive_pose_mapping.py" name="vive_pose_mapping_left" output="screen">
-      <param name="controller_side" type="string" value="left"/>
-      <param name="tracking_mode" type="string" value="$(arg tracking_mode)"/>
+  <node pkg="joy_teleop" type="vive_pose_mapping.py" name="vive_pose_mapping_left" output="screen" args="left $(arg tracking_mode)">
   </node>
   
 
-  <group ns="torso_controller">
-    <node pkg="joy_teleop" type="incrementer_server.py" name="incrementer"/>
+  <group ns="torso_controller" if="$(arg sim)">
+    <node pkg="joy_teleop" type="incrementer_server.py" name="torso_incrementer"/>
   </group>
+
+
+  <rosparam command="load" file="$(find tiago_dual_bringup)/config/motions/tiago_motions_general.yaml" />
+
 
 </launch>

@@ -88,8 +88,10 @@ class JoystickTeleop():
         if self._mode == 'base':
             
             self._base_control(joy_msg)
+
         elif self._mode == 'head':
             self._head_control(joy_msg)
+            
         elif self._mode == 'arm':
             if(joy_msg.buttons[4] and not self.arm_side == "left"):
                 self.arm_side = "left"

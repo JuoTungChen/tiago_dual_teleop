@@ -2,12 +2,16 @@
 """
 
 """
+import sys
 
 import rospy
 import numpy as np
 import transformations
 import tf
 import copy
+from numpy import linalg as LA
+
+
 from geometry_msgs.msg import Pose, PoseStamped
 
 
@@ -30,8 +34,6 @@ class VivePoseMapping:
         
         """
         self.initialized = False
-        self.robot_activation = rospy.Publisher('/'+controller_side+'/robot_activation', Float64, queue_size=1)
-        self.rotation_activation = rospy.Publisher('/rotation_activation', Float64, queue_size=1)
 
         if controller_side not in ['right', 'left']:
             raise ValueError(
@@ -132,10 +134,12 @@ class VivePoseMapping:
             Pose,
             queue_size=1,
         )
+        self.robot_activation = rospy.Publisher('/'+controller_side+'/robot_activation', Float64, queue_size=1)
+        self.rotation_activation = rospy.Publisher('/rotation_activation', Float64, queue_size=1)
 
         # # Topic subscriber:
         rospy.Subscriber('/arm_' + self.CONTROLLER_SIDE + '_target_pose', Pose, self.__commanded_pose_callback)
-        
+
         if self.CONTROLLER_SIDE == "right":
             rospy.Subscriber(
                 '/Right_Hand',
@@ -195,11 +199,15 @@ class VivePoseMapping:
             # print("started")
 
         if self.vive_buttons[0] == 1:
-            self.vive_menu += 1
+            # self.vive_menu += 1
+            self.__tracking_state_machine_state = 3
+            self.pose_tracking = False
+
+
             # print("home", vive_menu)
             # rospy.sleep(0.5)
 
-        if self.vive_buttons[2] == 1 and self.vive_axes[0] == 0:  # Side button as the stop button
+        if self.vive_buttons[3] == 1:  # Side button as the stop button
             # if vive_menu % 2 == 0 and vive_menu != 0:
             self.vive_stop += 1
             # print("pause", self.vive_stop)
@@ -216,7 +224,8 @@ class VivePoseMapping:
 
         # if self.HEADSET_MODE == 'head':
         #     negation = -1
-
+        # if not (msg.transform.translation.x == 0.0 and msg.transform.translation.y == 0.0 and msg.transform.translation.z == 0.0 
+        # and msg.transform.rotation.x == 0.0 and msg.transform.rotation.y == 0.0 and msg.transform.rotation.z == 0.0 and msg.transform.rotation.w == 1.0):
         self.__vive_pose['position'][0] = -msg.transform.translation.x
         self.__vive_pose['position'][1] = -msg.transform.translation.y
         self.__vive_pose['position'][2] = msg.transform.translation.z - 0.96 + 0.25
@@ -370,8 +379,8 @@ class VivePoseMapping:
         """
         # self.last_vive_pose = copy.deepcopy(self.__vive_pose)
         if not self.initialized:
-            self.initialized = True
             self.__update_ee_transformation()   
+            self.initialized = True
 
         self.vive_pose_difference['position'] = (
             self.__vive_pose['position']
@@ -385,7 +394,7 @@ class VivePoseMapping:
                 ),
             )
         )
-        # rospy.logwarn("vive_pose_difference: %s", self.vive_pose_difference)
+        # rospy.logwarn("vive_pose: %s, last commanded: %s", self.__vive_pose, self.last_commanded_pose)
 
     # # Public methods:
     def main_loop(self):
@@ -422,19 +431,19 @@ class VivePoseMapping:
             'orientation': np.array([0.0, 0.0, 0.0, 1.0]),
         }
 
+
         compensated_input_pose['position'] = (
             self.__vive_pose['position']
             - self.vive_pose_difference['position']
         )
 
         # Use fixed orientation.
-        compensated_input_pose['orientation'] = (
-            self.last_ee_pose['orientation']
-        )
+        # compensated_input_pose['orientation'] = (
+        #     self.last_ee_pose['orientation']
+        # )
 
         # Use oculus orientation.
         if self.__control_mode == 'full':
-            pass
             compensated_input_pose['orientation'] = (
                 transformations.quaternion_multiply(
                     self.vive_pose_difference['orientation'],
@@ -461,52 +470,41 @@ class VivePoseMapping:
                     self.__vive_pose['orientation'],
                 )
             )
-        pose_stamped = PoseStamped()
-        pose_stamped.header.stamp = rospy.Time.now()
-        pose_stamped.header.frame_id = self.base_link
 
-        pose_message = Pose()
-        # pose_message.position.x = self.vive_pose_difference['position'][0] + self.last_ee_pose['position'][0]
-        # pose_message.position.y = self.vive_pose_difference['position'][1] + self.last_ee_pose['position'][1]
-        # pose_message.position.z = self.vive_pose_difference['position'][2] + self.last_ee_pose['position'][2]
 
-        # pose_message.orientation.x = self.vive_pose_difference['orientation'][0] + self.last_ee_pose['orientation'][0]
-        # pose_message.orientation.y = self.vive_pose_difference['orientation'][1] + self.last_ee_pose['orientation'][1]
-        # pose_message.orientation.z = self.vive_pose_difference['orientation'][2] + self.last_ee_pose['orientation'][2]
-        # pose_message.orientation.w = self.vive_pose_difference['orientation'][3] + self.last_ee_pose['orientation'][3] 
-        # pose_message.position.x = self.vive_pose_difference['position'][0] 
-        # pose_message.position.y = self.vive_pose_difference['position'][1] 
-        # pose_message.position.z = self.vive_pose_difference['position'][2] 
+        diff = LA.norm(np.array(compensated_input_pose['position']) - np.array(self.last_commanded_pose['position']))
+        if diff > 0.15:
+            rospy.logwarn("calulate compensate: %s, %s, %s", compensated_input_pose['position'], self.last_commanded_pose['position'], diff)
+            self.__calculate_compensation()
 
-        # pose_message.orientation.x = self.vive_pose_difference['orientation'][0]
-        # pose_message.orientation.y = self.vive_pose_difference['orientation'][1]
-        # pose_message.orientation.z = self.vive_pose_difference['orientation'][2]
-        # pose_message.orientation.w = self.vive_pose_difference['orientation'][3] 
-        
-        pose_message.position.x = compensated_input_pose['position'][0]
-        pose_message.position.y = compensated_input_pose['position'][1]
-        pose_message.position.z = compensated_input_pose['position'][2]
+        else:
+            pose_stamped = PoseStamped()
+            pose_stamped.header.stamp = rospy.Time.now()
+            pose_stamped.header.frame_id = self.base_link
 
-        pose_message.orientation.x = compensated_input_pose['orientation'][0]
-        pose_message.orientation.y = compensated_input_pose['orientation'][1]
-        pose_message.orientation.z = compensated_input_pose['orientation'][2]
-        pose_message.orientation.w = compensated_input_pose['orientation'][3]
+            pose_message = Pose()
+            
+            pose_message.position.x = compensated_input_pose['position'][0]
+            pose_message.position.y = compensated_input_pose['position'][1]
+            pose_message.position.z = compensated_input_pose['position'][2]
 
-        pose_stamped.pose = pose_message
+            pose_message.orientation.x = compensated_input_pose['orientation'][0]
+            pose_message.orientation.y = compensated_input_pose['orientation'][1]
+            pose_message.orientation.z = compensated_input_pose['orientation'][2]
+            pose_message.orientation.w = compensated_input_pose['orientation'][3]
 
-        self.__compensate_pose_pub.publish(pose_stamped)
+            pose_stamped.pose = pose_message
+
+            self.__compensate_pose_pub.publish(pose_stamped)
         # rospy.logwarn("vive pose difference: %s", self.vive_pose_difference)
         # rospy.logwarn("vive last pose: %s", self.last_vive_pose)
+
 def node_shutdown():
     """
     
     """
 
-    print('\nNode is shutting down...\n')
-
-    # TODO: Stop arm motion.
-
-    print('\nNode is shut down.\n')
+    print('\nvive_pose_mapping has been shutdown\n')
 
 
 def main():
@@ -518,24 +516,26 @@ def main():
     rospy.init_node('vive_pose_mapping')
     rospy.on_shutdown(node_shutdown)
 
+    args = rospy.myargv(argv=sys.argv)
+    controller_side = args[1]
+    tracking_mode = args[2]
 
+    # controller_side = rospy.get_param(
+    #     param_name=f'{rospy.get_name()}/controller_side',
+    #     default='right',
+    # )
 
-    controller_side = rospy.get_param(
-        param_name=f'{rospy.get_name()}/controller_side',
-        default='right',
-    )
-
-    tracking_mode = rospy.get_param(
-        param_name=f'{rospy.get_name()}/tracking_mode',
-        default='press',
-    )
+    # tracking_mode = rospy.get_param(
+    #     param_name=f'{rospy.get_name()}/tracking_mode',
+    #     default='press',
+    # )
 
     vive_pose_mapping = VivePoseMapping(
         controller_side=controller_side,
         tracking_mode=tracking_mode,
         headset_mode='table',
     )
-    print('\nVive Pose mapping is ready.\n')
+    # print('\nVive Pose mapping is ready.\n')
 
     while not rospy.is_shutdown():
         vive_pose_mapping.main_loop()
