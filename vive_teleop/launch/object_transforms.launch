@@ -1,0 +1,35 @@
+<launch>
+    <!-- Publish static transform from odom to yellow_can -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_yellow_can" args="1.726 0.247 0.785 1.000 0.022 -0.003 0.001 odom yellow_can"/>
+
+    <!-- Publish static transform from odom to yellow_target -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_yellow_target" args="0.867 0.793 1.261 0.732 0.680 0.026 -0.024 odom yellow_target"/>
+
+    <!-- Publish static transform from odom to orange_can -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_orange_can" args="1.334 -0.355 0.514 1.000 0.022 -0.003 0.001 odom orange_can"/>
+
+    <!-- Publish static transform from odom to orange_target -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_orange_target" args="0.991 0.762 0.427 0.696 0.717 0.025 -0.025 odom orange_target"/>
+
+    <!-- Publish static transform from odom to hat -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_hat" args="-0.599 0.488 0.496 0.001 0.731 0.682 0.006 odom hat"/>
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_hat_target" args="0.039 -0.666 0.549 0.719 -0.691 -0.051 -0.049 odom hat_target"/>
+
+    <!-- Publish static transform from odom to clothes -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_clothes" args="-0.589 0.087 0.467 0.001 0.731 0.682 0.006 odom clothes"/>
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_clothes_target" args="0.039 -0.666 0.549 0.719 -0.691 -0.051 -0.049 odom clothes_target"/>
+    
+    <!-- Publish static transform from odom to basket_right_handle -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_basket_right_handle" args="-0.394 -0.859 0.264 0.723 -0.691 0.014 0.014 odom basket_right_handle"/>
+
+    <!-- Publish static transform from odom to basket_left_handle -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_basket_left_handle" args="0.355 -0.825 0.303 -0.671 0.741 0.028 -0.014 odom basket_left_handle"/>
+
+    <!-- Publish static transform from odom to basket_right_target -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_basket_right_target" args="1.371 -0.796 0.848 1.000 0.013 -0.011 0.001 odom basket_right_target"/>
+
+    <!-- Publish static transform from odom to basket_left_target -->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_basket_left_target" args="1.383 -0.022 0.842 0.998 -0.051 -0.010 0.029 odom basket_left_target"/>
+
+
+</launch>
