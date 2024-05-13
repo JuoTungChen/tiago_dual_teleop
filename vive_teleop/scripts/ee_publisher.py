@@ -52,8 +52,8 @@ class TiagoArmEEChecker():
 
                 ext_msg = Bool()
                 ext_msg.data = ee_norm > 0.7
-                if ee_norm > 0.7:
-                    rospy.logwarn("norm: %s", ee_norm)
+                # if ee_norm > 0.7:
+                    # rospy.logwarn("norm: %s", ee_norm)
                 self.arm_extend_pub.publish(ext_msg)
                 rospy.sleep(0.01)
 

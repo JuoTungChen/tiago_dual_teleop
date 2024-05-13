@@ -174,7 +174,7 @@ class TiagoArmPositionControl():
                    
                     self.gripper_pressed = True
                 else:
-                    gripper_position = 0.08  # Close the gripper
+                    gripper_position = 0.075  # open the gripper
                     # # Create a trajectory point for the gripper
                     gripper_point = JointTrajectoryPoint()
                     gripper_point.positions = [gripper_position]
@@ -296,7 +296,8 @@ class TiagoArmPositionControl():
                         # self.arm_extend_pub.publish(ext_msg)
 
                     else:
-                        rospy.logwarn("large norm: %s", LA.norm(np.array(target_joint_angles) - np.array(self.arm_joint_states)))
+                        pass
+                        # rospy.logwarn("large norm: %s", LA.norm(np.array(target_joint_angles) - np.array(self.arm_joint_states)))
 
 
                 else:
@@ -310,7 +311,9 @@ class TiagoArmPositionControl():
         self.homing = True
 
         rospy.logwarn("%s arm moving to home position...", self.controller_side)
-        motion_name = "tele_home_" + self.controller_side
+        # motion_name = "tele_home_" + self.controller_side
+        motion_name = "tele_home_" + self.controller_side + "_v2"
+
         # motion_name = "tele_home"
         home_goal = PlayMotionGoal(motion_name = motion_name, skip_planning = False)
         self.play_motion_client.send_goal(home_goal)

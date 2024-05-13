@@ -215,7 +215,7 @@ class JoystickTeleop():
 
 
         self.head_orientation = [round(self.bound(yaw, self.head_joint_limits[0][0], self.head_joint_limits[0][1]), 2),
-                            round(self.bound(-pitch, self.head_joint_limits[1][0], self.head_joint_limits[1][1]), 2)]
+                            round(self.bound(-pitch-0.52, self.head_joint_limits[1][0], self.head_joint_limits[1][1]), 2)]
 
         self.filtered_orientation = [filtered_orientation_x, filtered_orientation_y, filtered_orientation_z, filtered_orientation_w]
         # rospy.logwarn("head orientation = %s, %s",round(math.degrees(head_orientation[0])), round(math.degrees(head_orientation[1])))

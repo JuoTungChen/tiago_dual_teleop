@@ -325,7 +325,7 @@ class TiagoArmPositionControl():
         self.homing = True
 
         rospy.logwarn("moving to home position...")
-        motion_name = "tele_home_" + self.controller_side
+        motion_name = "tele_home_" + self.controller_side + "_v2"
         home_goal = PlayMotionGoal(motion_name = motion_name, skip_planning = False)
         self.play_motion_client.send_goal(home_goal)
         self.play_motion_client.wait_for_result()
